@@ -122,7 +122,13 @@ label { font-size: 0.75rem; color: var(--muted); margin: 8px 0 4px; display: blo
       <label>Telefone (opcional)</label>
       <input type="text" id="telefone" placeholder="(00) 00000-0000" inputmode="tel">
       <label>Investidor (de quem é o capital)</label>
-      <select id="investidor"><option>Corinthians</option><option>Jogador</option><option>Ambos</option></select>
+      <select id="investidor" onchange="toggleParcial()"><option>Corinthians</option><option>Jogador</option><option>Ambos</option><option>Ambos/Parcial</option></select>
+      <div id="partial-block" style="display:none">
+        <label>Quanto o Corinthians entrou (R$)</label>
+        <input type="number" id="capCorinthians" placeholder="0,00" step="0.01" inputmode="decimal" oninput="recalcParcial()">
+        <label>Quanto o Jogador entrou (R$)</label>
+        <input type="number" id="capJogador" placeholder="0,00" step="0.01" inputmode="decimal" oninput="recalcParcial()">
+      </div>
       <label>Valor emprestado (R$)</label>
       <input type="number" id="valor" placeholder="0,00" step="0.01" inputmode="decimal">
       <label>Juros % (só o número: 3 = 3%)</label>
@@ -294,6 +300,7 @@ function resumoSocios() {
     if (e.investidor === 'Corinthians') capC += v;
     else if (e.investidor === 'Jogador') capJ += v;
     else if (e.investidor === 'Ambos') { capC += v/2; capJ += v/2; }
+    else if (e.investidor === 'Ambos/Parcial') { capC += Number(e.capCorinthians)||0; capJ += Number(e.capJogador)||0; }
     totalJuros += e.jurosValor;
     jurosRicardo += e.jurosRicardo;
     jurosSocios += e.jurosSocios;
@@ -393,6 +400,8 @@ function abrirDetalhe(idx) {
   document.getElementById('ld-body').innerHTML = `
     <div class="detail-line"><span class="k">Status</span><span class="v"><span class="badge ${e.status.toLowerCase()}">${e.status}</span></span></div>
     <div class="detail-line"><span class="k">Valor emprestado</span><span class="v">${fmt(e.valor)}</span></div>
+    ${e.investidor === 'Ambos/Parcial' ? `<div class="detail-line"><span class="k">— Corinthians entrou</span><span class="v">${fmt(e.capCorinthians)}</span></div>
+    <div class="detail-line"><span class="k">— Jogador entrou</span><span class="v">${fmt(e.capJogador)}</span></div>` : ''}
     <div class="detail-line"><span class="k">Juros (${esc(e.juros)}%)</span><span class="v">${fmt(e.jurosValor)}</span></div>
     ${Number(e.percRicardo)>0 ? `<div class="detail-line"><span class="k">— Ricardo (${esc(e.percRicardo)}% do juro)</span><span class="v">${fmt(e.jurosRicardo)}</span></div>
     <div class="detail-line"><span class="k">— Corinthians + Jogador</span><span class="v">${fmt(e.jurosSocios)}</span></div>` : ''}
@@ -482,11 +491,24 @@ function openFab() {
 
 // ---- Empréstimo: novo / editar / salvar / excluir ----
 let editandoEmprestimo = null;
+function toggleParcial() {
+  const partial = document.getElementById('investidor').value === 'Ambos/Parcial';
+  document.getElementById('partial-block').style.display = partial ? 'block' : 'none';
+  const valor = document.getElementById('valor');
+  valor.readOnly = partial;
+  if (partial) recalcParcial();
+}
+function recalcParcial() {
+  const c = Number(document.getElementById('capCorinthians').value) || 0;
+  const j = Number(document.getElementById('capJogador').value) || 0;
+  document.getElementById('valor').value = (c + j) ? (c + j) : '';
+}
 function limparFormEmprestimo() {
-  ['cliente','telefone','valor','juros','percRicardo','observacao'].forEach(id => document.getElementById(id).value = '');
+  ['cliente','telefone','valor','juros','percRicardo','observacao','capCorinthians','capJogador'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('investidor').value = 'Corinthians';
   document.getElementById('periodicidade').value = 'Semanal';
   document.getElementById('data').value = hojeISO();
+  toggleParcial();
 }
 function abrirNovoEmprestimo() {
   editandoEmprestimo = null;
@@ -501,9 +523,12 @@ function editarEmprestimo(idx) {
   document.getElementById('cliente').value = e.cliente || '';
   document.getElementById('telefone').value = e.telefone || '';
   document.getElementById('investidor').value = e.investidor || 'Corinthians';
+  document.getElementById('capCorinthians').value = e.capCorinthians || '';
+  document.getElementById('capJogador').value = e.capJogador || '';
   document.getElementById('valor').value = e.valor || '';
   document.getElementById('juros').value = e.juros || '';
   document.getElementById('percRicardo').value = e.percRicardo || '';
+  toggleParcial();
   document.getElementById('data').value = e.data || hojeISO();
   document.getElementById('periodicidade').value = e.periodicidade || 'Semanal';
   document.getElementById('observacao').value = e.observacao || '';
@@ -527,6 +552,14 @@ function salvarEmprestimo() {
     periodicidade: document.getElementById('periodicidade').value,
     observacao: document.getElementById('observacao').value.trim()
   };
+  if (dados.investidor === 'Ambos/Parcial') {
+    const c = Number(document.getElementById('capCorinthians').value) || 0;
+    const j = Number(document.getElementById('capJogador').value) || 0;
+    if (!c && !j) { alert('No Ambos/Parcial, informe quanto cada um entrou.'); return; }
+    dados.capCorinthians = c;
+    dados.capJogador = j;
+    dados.valor = c + j;
+  }
   if (!dados.cliente || !dados.valor) { alert('Preencha pelo menos o nome e o valor.'); return; }
   if (editandoEmprestimo !== null) {
     dados.id = emprestimos[editandoEmprestimo].id;
