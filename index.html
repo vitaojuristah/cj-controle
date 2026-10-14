@@ -113,7 +113,7 @@ body.logged-out .nav, body.logged-out .fab { display:none !important; }
   </div>
 
   <div class="userbar" id="userbar" style="display:none">
-    <span>Logado como <strong id="userName"></strong> <span id="userRole"></span></span>
+    <span>Logado como <strong id="userName"></strong></span>
     <button onclick="sair()">Sair</button>
   </div>
 
@@ -350,7 +350,11 @@ async function entrar() {
   const { error } = await sb.auth.signInWithPassword({ email: emailDoUsuario(u), password: s });
   btn.disabled = false; btn.textContent = 'Entrar';
   if (error) {
-    err.textContent = /Failed to fetch/i.test(error.message) ? 'Sem conexão com a internet.' : 'Usuário ou senha incorretos.';
+    console.warn('login:', error.code || '', error.message);
+    err.textContent = /Failed to fetch/i.test(error.message) ? 'Sem conexão com a internet.'
+      : (error.code === 'email_not_confirmed' || /not confirmed/i.test(error.message))
+        ? 'Usuário ainda não confirmado no Supabase (marque "Auto Confirm User" ao criar).'
+        : 'Usuário ou senha incorretos.';
     return;
   }
   document.getElementById('loginPass').value = '';
@@ -383,7 +387,7 @@ async function iniciarSessao() {
   contaAtual = socio.conta || socio.usuario;
   aplicarPerms(socio);
   document.body.classList.remove('logged-out');
-  document.getElementById('userName').textContent = contaAtual + (contaAtual.toLowerCase() === usuarioAtual ? '' : ' (' + usuarioAtual + ')');
+  document.getElementById('userName').textContent = contaAtual;
   document.getElementById('userbar').style.display = 'flex';
   document.getElementById('view-login').style.display = 'none';
   document.getElementById('home-partners').innerHTML = '<div class="loading">Carregando…</div>';
@@ -397,12 +401,6 @@ function aplicarPerms(s) {
   perms = { cadastrar: !!(s && s.pode_cadastrar), editar: !!(s && s.pode_editar),
             excluir: !!(s && s.pode_excluir), admin: !!(s && s.admin) };
   Object.keys(perms).forEach(k => document.body.classList.toggle('no-' + k, !perms[k]));
-  const falta = [];
-  if (!perms.cadastrar) falta.push('cadastra');
-  if (!perms.editar) falta.push('edita');
-  if (!perms.excluir) falta.push('exclui');
-  document.getElementById('userRole').textContent = !s ? '' :
-    falta.length === 3 ? '(só visualiza)' : falta.length ? '(não ' + falta.join(' nem ') + ')' : '';
 }
 
 // ---- Usuários e permissões (só administrador) ----
@@ -450,6 +448,7 @@ async function mudarUsuario(usuario, campo, valor, checkbox) {
   }
   if (usuario === usuarioAtual) {   // mudou a si mesmo: atualiza a tela na hora
     contaAtual = data.conta || data.usuario;
+    document.getElementById('userName').textContent = contaAtual;
     aplicarPerms(data);
   }
 }
